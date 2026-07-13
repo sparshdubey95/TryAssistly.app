@@ -38,7 +38,7 @@ export default async function InboxPage() {
   // 1. Get authenticated user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (!user || userError) {
-    redirect('/en/login');
+    redirect('/login');
   }
 
   // 2. Get user's profile → organization_id

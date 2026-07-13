@@ -2,13 +2,13 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import { OrgSetupModal } from '../org-setup-modal';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, Phone, Calendar as CalendarIcon, Tag } from 'lucide-react';
+import { Users, Phone, Tag } from 'lucide-react';
 
 export default async function LeadsPage() {
   const supabase = await createClient();
 
   const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (!user || userError) redirect('/en/login');
+  if (!user || userError) redirect('/login');
 
   const { data: profile } = await supabase
     .from('profiles')

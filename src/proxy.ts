@@ -1,17 +1,25 @@
-import createMiddleware from 'next-intl/middleware';
+import createIntlMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const intlMiddleware = createMiddleware(routing);
+const intlMiddleware = createIntlMiddleware(routing);
 
+/**
+ * Next.js 16 Proxy (replaces the deprecated middleware convention).
+ * 
+ * Responsibilities:
+ *  1. Refresh Supabase auth session cookies on every request
+ *  2. Apply next-intl locale routing for non-auth pages
+ *  3. Protect /dashboard routes — redirect unauthenticated users to /login
+ *  4. Redirect authenticated users away from /login to /dashboard
+ */
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Skip intl middleware for auth routes (OAuth callback, signout)
-  // These are NOT under [locale] and should not be rewritten
+  // ─── Auth routes (OAuth callback, signout) ───
+  // These are NOT under [locale] and should not be rewritten by intl
   if (pathname.startsWith('/auth/')) {
-    // Still need to refresh Supabase session cookies on auth routes
     let response = NextResponse.next({ request });
 
     const supabase = createServerClient(
@@ -31,16 +39,15 @@ export async function proxy(request: NextRequest) {
       }
     );
 
-    // Refresh session
+    // Refresh session — ensures cookies are up to date
     await supabase.auth.getUser();
-
     return response;
   }
 
-  // 1. Run the internationalization middleware for all other routes
+  // ─── All other routes: Apply intl middleware first ───
   const response = intlMiddleware(request);
 
-  // 2. Hook Supabase Auth into the response
+  // ─── Hook Supabase session refresh into the intl response ───
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -59,10 +66,12 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // 3. Protect the localized dashboard routes (e.g. /en/dashboard, /es/dashboard)
-  const locales = routing.locales.join('|');
-  const isDashboard = pathname.match(new RegExp(`^/(${locales})/dashboard`));
+  // ─── Route protection ───
+  const localePattern = routing.locales.join('|');
+  const isDashboard = new RegExp(`^/(${localePattern})/dashboard`).test(pathname);
+  const isLoginPage = new RegExp(`^/(${localePattern})/login$`).test(pathname);
 
+  // Protect dashboard — unauthenticated users go to login
   if (!user && isDashboard) {
     const url = request.nextUrl.clone();
     const locale = pathname.split('/')[1] || 'en';
@@ -70,8 +79,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 4. Redirect logged-in users away from login page
-  const isLoginPage = pathname.match(new RegExp(`^/(${locales})/login$`));
+  // Redirect logged-in users away from login page
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
     const locale = pathname.split('/')[1] || 'en';
@@ -83,7 +91,14 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Match all paths except static assets and API routes
-  // Note: /auth/* routes are handled inside the middleware function above
-  matcher: ['/', '/(en|es|fr|de|it)/:path*', '/((?!api|_next|_vercel|.*\\..*).*)', '/auth/:path*']
+  matcher: [
+    // Match root
+    '/',
+    // Match all locale-prefixed paths
+    '/(en|es|fr|de|it)/:path*',
+    // Match all paths except static assets, API routes, and files with extensions
+    '/((?!api|_next|_vercel|.*\\..*).*)',
+    // Match auth callback routes
+    '/auth/:path*',
+  ],
 };

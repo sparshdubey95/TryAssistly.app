@@ -2,13 +2,13 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import { OrgSetupModal } from '../org-setup-modal';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon } from 'lucide-react';
 
 export default async function FollowUpsPage() {
   const supabase = await createClient();
 
   const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (!user || userError) redirect('/en/login');
+  if (!user || userError) redirect('/login');
 
   const { data: profile } = await supabase
     .from('profiles')

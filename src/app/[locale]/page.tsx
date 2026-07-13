@@ -7,6 +7,8 @@ import { PhoneMissed, MessageSquare, Mic, Globe, Calendar, Mail, Smartphone, Arr
 import { motion } from "framer-motion";
 import { Link } from "@/i18n/routing";
 import { ModeToggle } from "@/components/theme-toggle";
+import { createClient } from "@/utils/supabase/client";
+import { useState, useEffect } from "react";
 
 // ──────────────────────────────────────────────
 // PRICING DATA — Paste your checkout URLs below
@@ -18,36 +20,54 @@ const pricingTiers = [
     period: "/ month",
     description: "Perfect for single-location businesses getting started.",
     features: ["WhatsApp CRM integration", "AI Auto-replies", "Voice-note transcription", "Basic Analytics"],
-    ctaText: "Payments Coming Soon",
+    ctaText: "Get Started",
     isRecommended: false,
-    // TODO: Replace with your Lemon Squeezy / Paddle checkout link
-    checkoutUrl: "YOUR_MONTHLY_CHECKOUT_LINK"
+    variantId: process.env.NEXT_PUBLIC_LS_VARIANT_MONTHLY,
   },
   {
     name: "Quarterly",
     price: "$99",
     period: "/ 3 months",
-    description: "Our most popular plan. Save 15% on seamless automation.",
+    description: "Our most popular plan — save 15% with seamless automation.",
     features: ["Everything in Monthly", "Multi-lingual FAQ handling", "Follow-up sequences", "Priority AI processing"],
-    ctaText: "Payments Coming Soon",
+    ctaText: "Start Free Trial",
     isRecommended: true,
-    // TODO: Replace with your Lemon Squeezy / Paddle checkout link
-    checkoutUrl: "YOUR_QUARTERLY_CHECKOUT_LINK"
+    variantId: process.env.NEXT_PUBLIC_LS_VARIANT_QUARTERLY,
   },
   {
     name: "Yearly",
     price: "$199",
     period: "/ year",
-    description: "Best value for established businesses.",
+    description: "Best value — save 57% for established businesses.",
     features: ["Everything in Quarterly", "White-glove onboarding", "Custom AI training instructions"],
-    ctaText: "Payments Coming Soon",
+    ctaText: "Get Started",
     isRecommended: false,
-    // TODO: Replace with your Lemon Squeezy / Paddle checkout link
-    checkoutUrl: "YOUR_YEARLY_CHECKOUT_LINK"
-  }
+    variantId: process.env.NEXT_PUBLIC_LS_VARIANT_YEARLY,
+  },
 ];
 
 export default function Home() {
+  const [orgId, setOrgId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchOrg() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+         const { data } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single();
+         if (data) setOrgId(data.organization_id);
+      }
+    }
+    fetchOrg();
+  }, []);
+
+  const getCheckoutUrl = (variantId?: string) => {
+    if (!variantId) return "";
+    const storeSlug = process.env.NEXT_PUBLIC_LS_STORE_SLUG || "tryassistly";
+    if (!orgId) return "/login"; // Redirect to login if they try to checkout without being logged in
+    return `https://${storeSlug}.lemonsqueezy.com/checkout/buy/${variantId}?checkout[custom][org_id]=${orgId}`;
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
       {/* Navbar */}
@@ -257,17 +277,20 @@ export default function Home() {
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-              {pricingTiers.map((tier) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto items-start">
+              {pricingTiers.map((tier) => {
+                const hasCheckout = !!tier.variantId;
+                return (
                 <Card 
                   key={tier.name}
                   className={tier.isRecommended 
-                    ? "bg-primary text-primary-foreground shadow-xl relative overflow-hidden border-primary" 
+                    ? "bg-primary text-primary-foreground shadow-2xl relative overflow-hidden border-primary md:scale-105 md:-my-2 ring-2 ring-primary/20" 
                     : "bg-card backdrop-blur-xl border-border/50"}
                 >
                   {tier.isRecommended && (
-                    <div className="absolute top-0 right-0 bg-white/20 px-3 py-1 rounded-bl-xl text-xs font-medium uppercase tracking-wider">
-                      Most Popular
+                    <div className="absolute top-0 right-0 bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-bl-xl text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3" />
+                      Recommended
                     </div>
                   )}
                   <CardHeader>
@@ -295,22 +318,32 @@ export default function Home() {
                   <CardFooter className="flex-col gap-3">
                     <Button 
                       variant={tier.isRecommended ? "default" : "outline"} 
-                      disabled={true}
+                      disabled={!hasCheckout}
                       className={tier.isRecommended 
-                        ? "w-full rounded-full h-12 bg-white text-primary hover:bg-white/90" 
+                        ? "w-full rounded-full h-12 bg-white text-primary hover:bg-white/90 font-semibold" 
                         : "w-full rounded-full h-12"}
                       onClick={() => {
-                        window.open(tier.checkoutUrl, "_blank");
+                        const url = getCheckoutUrl(tier.variantId);
+                        if (url) {
+                          if (url === "/login") {
+                            window.location.href = url;
+                          } else {
+                            window.open(url, "_blank");
+                          }
+                        }
                       }}
                     >
-                      {tier.ctaText}
+                      {hasCheckout ? tier.ctaText : "Coming Soon"}
                     </Button>
-                    <p className="text-xs text-center text-muted-foreground mt-2">
-                      We are currently finalizing our merchant approval. Check back in 48 hours to start your trial!
-                    </p>
+                    {!hasCheckout && (
+                      <p className={`text-xs text-center mt-1 ${tier.isRecommended ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                        Payments will be activated shortly.
+                      </p>
+                    )}
                   </CardFooter>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>

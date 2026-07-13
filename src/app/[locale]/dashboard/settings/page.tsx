@@ -7,7 +7,7 @@ export default async function SettingsPage() {
   const supabase = await createClient();
 
   const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (!user || userError) redirect('/en/login');
+  if (!user || userError) redirect('/login');
 
   const { data: profile } = await supabase
     .from('profiles')

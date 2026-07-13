@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 
 export async function POST() {
   const supabase = await createClient()
@@ -12,6 +13,10 @@ export async function POST() {
     await supabase.auth.signOut()
   }
 
+  // Read locale from the NEXT_LOCALE cookie so we redirect to the correct locale login
+  const cookieStore = await cookies()
+  const locale = cookieStore.get('NEXT_LOCALE')?.value || 'en'
+
   revalidatePath('/', 'layout')
-  redirect('/en/login')
+  redirect(`/${locale}/login`)
 }
